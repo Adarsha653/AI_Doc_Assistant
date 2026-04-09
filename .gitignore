@@ -1,0 +1,7 @@
+venv/
+.venv_groq/
+.venv_test/
+__pycache__/
+*.pyc
+.env
+vectorstore/
