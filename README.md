@@ -35,9 +35,22 @@ Small document question-answering assistant with a Chainlit UI. Upload PDFs/TXT 
 Store these in a local `.env` (never commit).
 
 ## Quick start (local)
-1. Create and activate main venv
+1. Create and activate main venv and run using chainlit
+
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+2. (Optional) Groq test venv (recommended)
+
+```bash
+python -m venv .venv_groq
+source .venv_groq/bin/activate
+pip install --upgrade pip
+pip install groq httpx==0.28.1
+# set GROQ_API_KEY and GROQ_MODEL in this shell before testing Groq
+```
+
