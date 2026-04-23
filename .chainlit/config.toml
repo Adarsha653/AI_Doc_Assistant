@@ -27,6 +27,10 @@ latex = false
 # Authorize users to upload files with messages
 multi_modal = true
 
+# Keep the thread scrolled when new assistant steps appear (helps with long chats).
+user_message_autoscroll = true
+assistant_message_autoscroll = true
+
 # Allows user to use speech to text
 [features.speech_to_text]
     enabled = false
@@ -35,29 +39,21 @@ multi_modal = true
 
 [UI]
 # Name of the app and chatbot.
-name = "Chatbot"
+name = "AI Doc Assistant"
 
-# Show the readme while the thread is empty.
-show_readme_as_default = true
+# Closer to ChatGPT’s default look; toggle still available in the header.
+default_theme = "dark"
 
 # Description of the app and chatbot. This is used for HTML tags.
 # description = ""
 
-# Large size content are by default collapsed for a cleaner ui
-default_collapse_content = true
-
-# The default value for the expand messages settings.
-default_expand_messages = false
-
-# Hide the chain of thought details from the user in the UI.
-hide_cot = false
-
 # Link to your github repo. This will add a github button in the UI's header.
 # github = ""
 
-# Specify a CSS file that can be used to customize the user interface.
-# The CSS file can be served from the public directory or via an external link.
-# custom_css = "/public/test.css"
+# Hide the header Readme button (Chainlit 2.x has no supported `show_readme_as_default` toggle).
+custom_css = "/public/hide-readme.css"
+# Add Cancel next to Browse on file-ask (Chainlit has no built-in dismiss on that row).
+custom_js = "/public/ask-file-in-plane-cancel.js"
 
 # Override default MUI light theme. (Check theme.ts)
 [UI.theme.light]

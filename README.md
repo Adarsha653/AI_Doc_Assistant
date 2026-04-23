@@ -1,56 +1,97 @@
-# AI_Doc_Assistant
+# AI Doc Assistant
 
-Small document question-answering assistant with a Chainlit UI. Upload PDFs/TXT (extendable to DOCX/PPTX/images), the app builds a FAISS vectorstore and answers user questions using Groq (primary) and Hugging Face (hosted or local transformers) as fallbacks.
+Chainlit app for **question answering over your own files**. You upload documents, the app indexes them with **local embeddings + FAISS**, then answers in chat using **Groq** (streaming when configured) with **Hugging Face** fallbacks.
 
 ## Features
-- Upload PDF / TXT and extract text
-- Build and persist FAISS vectorstore for retrieval
-- Retrieve relevant passages and answer with:
-  - Groq (configurable via `GROQ_MODEL`)
-  - Hugging Face hosted inference or local `transformers` fallback
-- Defensive error handling and debug logs
-- Local fallback downloads models if hosted inference is unavailable
 
-## Project structure
-- app.py — Chainlit entrypoint and UI handlers
-- src/
-  - qa.py — QASystem: retrieval + LLM orchestration (Groq, HF, local fallback)
-  - document_loader.py — load/parse uploaded documents (PDF/TXT; extendable)
-  - other modules (helpers, embeddings) as needed
-- .chainlit/ — Chainlit UI assets and translations
-- vectorstore/ — persisted FAISS data (ignored in git)
-- .venv* / venv / .venv_groq — virtualenvs (ignored)
-- README.md, requirements.txt, .gitignore
+- **Formats:** PDF, TXT, Markdown, CSV/TSV, HTML, JSON, XML, **DOCX**, **XLSX**, **XLS**, **PPTX**. Legacy **.doc** is not supported—save as **.docx** or **PDF** first.
+- **Session index:** one vector store per Chainlit session under `vectorstore/<session_id>/`. **Add more documents** merges new uploads into the same index.
+- **Retrieval:** similarity search with optional broader retrieval for summaries and multi-file balancing for compare-style questions.
+- **Answers:** grounded on your files; prompts steer plain language (e.g. “document” / “file”, not jargon like “excerpt”).
+- **UI:** Custom header (logo + title), welcome splash, scroll helpers, and file-ask **Cancel** via `public/` assets and `.chainlit/config.toml` (see below).
+
+## Project layout
+
+| Path | Role |
+|------|------|
+| `app.py` | Chainlit entrypoint: chat start, ingest, retrieval, streaming replies |
+| `chainlit.md` | Short in-product description for the UI |
+| `src/config.py` | Env-driven limits (chunking, retrieval, Groq) |
+| `src/qa.py` | Retrieval, deduped context, Groq/HF generation |
+| `src/document_loader.py` | Parse uploads and chunk text |
+| `src/chat.py`, `src/embeddings.py` | Chat wrapper, local SentenceTransformer embeddings |
+| `public/` | `logo_light.svg` / `logo_dark.svg` (served as `/logo?theme=…`), `hide-readme.css`, `ask-file-in-plane-cancel.js` |
+| `.chainlit/config.toml` | App name, theme, `custom_css` / `custom_js` pointing at `public/` |
+| `tests/` | pytest (loader + QA mocks) |
+| `Dockerfile`, `.dockerignore` | Optional container run |
+| `requirements.txt`, `.env.example`, `pyproject.toml` | Dependencies and env template |
 
 ## Requirements
-- macOS (instructions use bash/zsh)
-- Python 3.10+ (3.11 recommended)
+
+- macOS or Linux (Windows untested)
+- **Python 3.10–3.13** (`requires-python` in `pyproject.toml`)
 - Git
 
-## Environment variables (do NOT commit real keys)
-- HUGGINGFACE_API_KEY — Hugging Face token (optional; required for HF hosted)
-- GROQ_API_KEY — Groq API key (required if using Groq)
-- GROQ_MODEL — Groq model id (e.g. `openai/gpt-oss-120b`)
-- USE_GROQ — optional toggle (`true`/`false`)
-Store these in a local `.env` (never commit).
+## Environment variables
+
+Copy `.env.example` to `.env`. Do not commit `.env`.
+
+| Variable | Purpose |
+|----------|---------|
+| `GROQ_API_KEY` | Groq API key (enables Groq + streaming) |
+| `GROQ_MODEL` | Groq model id |
+| `GROQ_MAX_TOKENS` | Max completion tokens (default in code is **3072** if unset) |
+| `GROQ_TEMPERATURE` | Sampling temperature |
+| `HUGGINGFACE_API_KEY` | HF token for hosted inference fallback |
+| `RETRIEVER_K` | Default top‑k chunks |
+| `RETRIEVER_K_OVERVIEW` | Larger k for broad “tell me about…” style questions |
+| `RETRIEVER_K_MULTI` | k when comparing multiple files |
+| `MULTI_FILE_CHUNKS_PER_FILE`, `MULTI_FILE_POOL_K` | Multi-file retrieval tuning |
+| `DOC_CHUNK_SIZE`, `DOC_CHUNK_OVERLAP` | Text splitter settings |
+| `EMBEDDING_MODEL` | Sentence-Transformers model id |
+| `HF_LOCAL_MODEL` | Small local HF model if hosted calls fail |
 
 ## Quick start (local)
-1. Create and activate main venv and run using chainlit
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
+cp .env.example .env       # then edit .env (at least GROQ_API_KEY for best experience)
+chainlit run app.py
 ```
 
-2. (Optional) Groq test venv (recommended)
+Always run **`pip install -r requirements.txt`** after cloning or switching venvs so Office formats work (**python-docx**, **openpyxl**, **python-pptx**, **xlrd**, etc.). If `.docx` fails with `No module named 'docx'`, dependencies were not installed.
+
+Open **http://localhost:8000** (or the URL Chainlit prints). Upload when prompted, then ask questions.
+
+## Tests
 
 ```bash
-python -m venv .venv_groq
-source .venv_groq/bin/activate
-pip install --upgrade pip
-pip install groq httpx==0.28.1
-# set GROQ_API_KEY and GROQ_MODEL in this shell before testing Groq
+source venv/bin/activate
+pytest
 ```
 
+## Docker (optional)
+
+```bash
+docker build -t ai-doc-assistant .
+docker run --rm -p 8000:8000 --env-file .env ai-doc-assistant
+```
+
+Then open **http://localhost:8000**.
+
+## Logos and branding
+
+Place **`public/logo_light.svg`** and **`public/logo_dark.svg`**. Chainlit serves them from **`/logo?theme=light`** and **`/logo?theme=dark`**. The custom JS/CSS also uses them in the header and first-load splash.
+
+## Optional: isolated Groq tooling venv
+
+```bash
+python3 -m venv .venv_groq
+source .venv_groq/bin/activate
+pip install --upgrade pip
+pip install groq httpx
+# set GROQ_API_KEY and GROQ_MODEL in this shell before testing Groq
+```

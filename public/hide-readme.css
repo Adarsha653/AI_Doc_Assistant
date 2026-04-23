@@ -1,0 +1,147 @@
+/* Hide Chainlit header "Readme" control (in-app docs live in chat via WELCOME_OVERVIEW). */
+#readme-button {
+  display: none !important;
+}
+
+/* ---- Header: ChatGPT-style dark bar + app logo/name (see public/ask-file-in-plane-cancel.js) ---- */
+#header {
+  background-color: #2f2f2f !important;
+  color: #ececec !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#header .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+#header button:hover,
+#header [role="button"]:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+#ada-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-right: 0.5rem;
+  padding-right: 0.85rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+#ada-header-brand img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex-shrink: 0;
+}
+
+#ada-header-app-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  color: #f6f6f6;
+  white-space: nowrap;
+}
+
+/* ---- "Add more documents": Chainlit 2.x uses shadcn Button + Tailwind (not MUI). Stable id from app.py. ---- */
+#add-documents-cta {
+  background-color: #f80061 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  padding: 0.5rem 1.25rem !important;
+  min-height: 2.5rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  letter-spacing: 0.01em;
+}
+
+/* Beat Tailwind `text-muted-foreground` on the action */
+#add-documents-cta.text-muted-foreground {
+  color: #ffffff !important;
+}
+
+#add-documents-cta:hover,
+#add-documents-cta:focus-visible {
+  background-color: #d90054 !important;
+  color: #ffffff !important;
+}
+
+#add-documents-cta svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Injected next to Chainlit's Browse on file-ask (see public/ask-file-in-plane-cancel.js) */
+#ask-file-cancel-btn {
+  border-radius: 9999px !important;
+  border: 1px solid rgb(0 0 0 / 0.15) !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+  padding: 0.5rem 1.1rem !important;
+  min-height: 2.5rem !important;
+  font-size: 0.875rem !important;
+  cursor: pointer;
+}
+
+#ask-file-cancel-btn:hover,
+#ask-file-cancel-btn:focus-visible {
+  background-color: rgb(0 0 0 / 0.04) !important;
+}
+
+/* ---- First paint: hide Chainlit’s delayed fade on empty-thread welcome (see ask-file-in-plane-cancel.js splash). ---- */
+#welcome-screen {
+  opacity: 1 !important;
+  transition: none !important;
+  transition-delay: 0s !important;
+}
+
+/* ---- Branded splash until the server sends the first thread step (covers default Chainlit logo). ---- */
+#ada-thread-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #252525;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+#ada-thread-splash .ada-thread-splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 2rem;
+  max-width: 22rem;
+}
+
+#ada-thread-splash .ada-thread-splash-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f6f6f6;
+  letter-spacing: -0.03em;
+}
+
+#ada-thread-splash .ada-thread-splash-sub {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+#ada-thread-splash .ada-thread-splash-spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #f80061;
+  border-radius: 50%;
+  animation: ada-splash-spin 0.7s linear infinite;
+}
+
+@keyframes ada-splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

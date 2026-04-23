@@ -1,0 +1,15 @@
+[project]
+name = "ai-doc-assistant"
+version = "0.1.0"
+description = "Chainlit document QA with FAISS + Groq/HF"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked:DeprecationWarning",
+    "ignore:builtin type SwigPyObject:DeprecationWarning",
+    "ignore:builtin type swigvarlink:DeprecationWarning",
+]
