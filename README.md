@@ -10,6 +10,57 @@ Chainlit app for **question answering over your own files**. You upload document
 - **Answers:** grounded on your files; prompts steer plain language (e.g. “document” / “file”, not jargon like “excerpt”).
 - **UI:** Custom header (logo + title), welcome splash, scroll helpers, and file-ask **Cancel** via `public/` assets and `.chainlit/config.toml` (see below).
 
+## Architecture
+
+High-level data flow: the browser talks to **Chainlit**; each chat session gets its own **FAISS** folder on disk. Uploads are parsed into chunks, embedded locally, and indexed. Questions trigger similarity search, then the model answers using **Groq** (streaming) or **Hugging Face** fallbacks.
+
+```mermaid
+flowchart TB
+  subgraph Client["Client"]
+    BR["Browser"]
+    PUB["public: CSS, JS, logos"]
+  end
+
+  subgraph ChainlitApp["Chainlit app"]
+    APP["app.py"]
+  end
+
+  subgraph Core["Python core src"]
+    CFG["config.py + .env"]
+    CHAT["chat.py ChatInterface"]
+    DL["document_loader.py"]
+    QA["qa.py QASystem"]
+    EMB["embeddings.py LocalEmbeddings"]
+  end
+
+  subgraph Disk["Local disk"]
+    VS["vectorstore / session_id / FAISS"]
+  end
+
+  subgraph APIs["External APIs"]
+    GROQ["Groq"]
+    HF["Hugging Face"]
+  end
+
+  BR -->|"HTTP + realtime"| APP
+  PUB --> BR
+
+  APP --> CFG
+  APP -->|"ingest uploads"| DL
+  APP -->|"session chat"| CHAT
+  DL -->|"LangChain Documents"| QA
+  CHAT --> QA
+  CHAT --> EMB
+  EMB -->|"chunk + query vectors"| QA
+  QA <-->|"load save index"| VS
+  QA -->|"stream primary"| GROQ
+  QA -->|"optional fallback"| HF
+```
+
+**Ingest path:** `DocumentLoader` reads the file → splits into chunks → `QASystem.ingest_documents` embeds with `LocalEmbeddings` and appends to the session FAISS store.
+
+**Query path:** user message → `retrieve_with_scores` (with optional multi-file balancing and chunk dedupe) → `context_from_docs` → `stream_answer_tokens` → Groq (or HF) → tokens streamed back to the UI.
+
 ## Project layout
 
 | Path | Role |
