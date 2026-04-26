@@ -128,10 +128,28 @@ pytest
 
 ```bash
 docker build -t ai-doc-assistant .
-docker run --rm -p 8000:8000 --env-file .env ai-doc-assistant
+docker run --rm -p 7860:7860 --env-file .env ai-doc-assistant
 ```
 
-Then open **http://localhost:8000**.
+Then open **http://localhost:7860**.
+
+## Deploy on Hugging Face Spaces (Docker)
+
+1. Push this repo to GitHub (already done).
+2. In Hugging Face, create a new **Space**:
+   - **SDK:** `Docker`
+   - **Visibility:** your choice
+3. Link the Space to this repository (or push the same files to the Space repo).
+4. In Space **Settings → Variables and secrets**, add:
+   - **Secret:** `GROQ_API_KEY` (required for Groq answers)
+   - **Variable (optional):** `GROQ_MODEL`, `GROQ_MAX_TOKENS`, `GROQ_TEMPERATURE`
+   - **Variable (optional):** retrieval/chunking vars from `.env.example`
+5. Keep the Dockerfile as-is: it listens on `${PORT}` (default `7860`), which matches Spaces requirements.
+6. Wait for build to finish, then open your Space URL.
+
+Notes:
+- Free Spaces can sleep and restart, so local `vectorstore/` data is not guaranteed to persist forever.
+- Your app is session-scoped; users may need to re-upload documents after restarts.
 
 ## Logos and branding
 

@@ -16,7 +16,8 @@ COPY public ./public
 COPY src ./src
 COPY .chainlit ./.chainlit
 
-EXPOSE 8000
+EXPOSE 7860
 ENV CHAINLIT_HOST=0.0.0.0
+ENV PORT=7860
 
-CMD ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "chainlit run app.py --host 0.0.0.0 --port ${PORT:-7860}"]
