@@ -1,3 +1,13 @@
+---
+title: AI Doc Assistant
+emoji: 🏆
+colorFrom: yellow
+colorTo: blue
+sdk: docker
+pinned: false
+license: mit
+---
+
 # AI Doc Assistant
 
 Chainlit app for **question answering over your own files**. You upload documents, the app indexes them with **local embeddings + FAISS**, then answers in chat using **Groq** (streaming when configured) with **Hugging Face** fallbacks.
