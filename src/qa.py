@@ -73,8 +73,37 @@ def is_overview_style_query(question: str) -> bool:
     return any(d in q for d in doc_words) and any(a in q for a in ask_words)
 
 
+def wants_identity_style_query(question: str) -> bool:
+    """Who owns the resume / name / contact — needs header chunks, not only experience."""
+    q = (question or "").lower()
+    if not q.strip():
+        return False
+    if any(
+        p in q
+        for p in (
+            "who does",
+            "who is the",
+            "who is this",
+            "whose resume",
+            "whose cv",
+            "belong to",
+            "owner of this",
+        )
+    ):
+        return True
+    if any(p in q for p in ("full name", "person's name", "candidate's name", "candidates name")):
+        return True
+    if "name" in q and "resume" in q:
+        return True
+    if "name" in q and "cv" in q and "project" not in q:
+        return True
+    return False
+
+
 def wants_broader_retrieval(question: str) -> bool:
     """Use more chunks for open summaries and for role-fit / opinion questions."""
+    if wants_identity_style_query(question):
+        return True
     if is_overview_style_query(question):
         return True
     q = (question or "").lower()
@@ -128,6 +157,14 @@ def resume_chunk_priority(doc: Document) -> int:
         x in head for x in ("gmail", "outlook", "edu", "linkedin", "github", "http")
     ):
         score += 8
+    for line in raw.splitlines()[:5]:
+        s = line.strip()
+        if len(s) < 80 and re.match(r"^[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}$", s):
+            score += 7
+            break
+    for kw in ("phone", "mobile", "linkedin.com", "github.com"):
+        if kw in head:
+            score += 2
     if "summary" in head or "professional summary" in full:
         score += 6
     if "master of" in full and "data" in full:
@@ -277,10 +314,31 @@ Rules:
 - Use readable Markdown (short paragraphs, bullets when helpful). Avoid huge tables unless the user asks.
 - When the document states something plainly (e.g. a resume header with a person's name), answer directly—do not hedge with unnecessary disclaimers.
 - Prefer everyday words (**document**, **file**, **upload**, **section**, **what it says**). Do **not** use words like **excerpt**, **passage**, or **corpus** in your reply.
-- For **broad** requests (summarize this resume/CV/document, tell me about it, overview, walk me through it): respond with **scannable sections** using `##` headings such as Contact, Professional summary, Experience, Education, Skills & tools, Projects, Languages, Other. Open with 2–4 sentences on who they are and their focus, then the sections—**synthesize**; do not dump or paraphrase every bullet from the document verbatim.
+- For **who / whose / name** questions (e.g. who this resume or CV “belongs to”): **only** state the person’s name and, at most, **one** line of contact (city, email, or phone) if that appears in the first lines. **Do not** list jobs, experience, side projects, education, or skills—otherwise you will run out of space mid-sentence. If no name is in the text below, say so in one sentence. Do **not** answer with only work history.
+- For **broad** requests (summarize this resume/CV/document, tell me about it, overview, walk me through it): respond with **scannable sections** using `##` headings such as Contact, Professional summary, Experience, Education, Skills & tools, Projects, Languages, Other. Open with 2–4 sentences on who they are and their focus, then the sections—**synthesize**; do not dump or paraphrase every bullet from the document verbatim. Use **bullets**; do not repeat the same project or job description more than once; stop before repeating a paragraph you already gave.
 - For **role-fit or opinion** questions (e.g. “Is this resume good for a data scientist role?”): answer from what the document shows; give a concise view (strengths, gaps, who it fits) in plain language. If you only have part of the file below, say briefly what you can and cannot judge from that—do not invent credentials not present in the document.
 - The text below is split into blocks headed by **Source file:** with the filename. When several **different** filenames appear, they are **different uploads**—do not claim they are “the same document” unless every block shares one identical filename. Explain how they relate using what each file shows.
 - **No repetition:** if the same idea appears in more than one block below, state it **once**. Do not copy the same paragraph or sentence multiple times, and do not loop a closing summary. Finish when the question is answered."""
+
+
+def _max_output_tokens_for_question(question: str) -> int:
+    if wants_identity_style_query(question):
+        cap = min(config.GROQ_MAX_TOKENS_IDENTITY, config.GROQ_MAX_TOKENS)
+        return max(64, cap)
+    return config.GROQ_MAX_TOKENS
+
+
+def _user_content_for_qa(context: str, question: str) -> str:
+    base = f"Document text:\n{context}\n\nQuestion: {question}"
+    if not wants_identity_style_query(question):
+        return base
+    return (
+        base
+        + "\n\n"
+        "Reply in at most 3 short sentences. State the person's name from the header or contact line. "
+        "You may add one line with city, email, or phone if present. Do not summarize jobs, side projects, "
+        "or education. End with a complete sentence (full stop)."
+    )
 
 
 class QASystem:
@@ -430,14 +488,54 @@ class QASystem:
 
         if wants_multi_file_retrieval(question):
             k = config.RETRIEVER_K_MULTI
+        elif wants_identity_style_query(question):
+            k = config.RETRIEVER_K_IDENTITY
         elif wants_broader_retrieval(question):
             k = config.RETRIEVER_K_OVERVIEW
         else:
             k = config.RETRIEVER_K
         scored = self.vector_store.similarity_search_with_score(question, k=k)
+        scored = self._merge_identity_header_chunks(question, scored, k)
         if wants_multi_file_retrieval(question) and len(scored) > 1:
             scored = diversify_chunks_by_file(scored, k)
         return scored
+
+    def _merge_identity_header_chunks(
+        self, question: str, scored: List[Tuple[Document, float]], k: int
+    ) -> List[Tuple[Document, float]]:
+        """Prepend chunks that match contact/header language so 'who is this' questions see names."""
+        if not wants_identity_style_query(question):
+            return scored
+        assert self.vector_store is not None
+        boost_q = (
+            "resume header name email phone contact address linkedin professional summary"
+        )
+        extra_k = min(16, max(10, k * 2))
+        extra = self.vector_store.similarity_search_with_score(
+            boost_q, k=extra_k
+        )
+        merged: List[Tuple[Document, float]] = []
+        seen: set[tuple[str, str]] = set()
+        for doc, sc in extra + scored:
+            key = _doc_dedupe_key(doc)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append((doc, float(sc)))
+        # Prefer contact/header over experience bullets so the model is not fed whole-job paragraphs.
+        merged.sort(key=lambda x: (-resume_chunk_priority(x[0]), x[1]))
+        return merged[:k]
+
+    def _groq_extra_params(self) -> dict:
+        """OpenAI-compatible knobs supported by Groq for less repetition / rambling."""
+        out: dict = {}
+        tp = config.GROQ_TOP_P
+        if 0 < tp <= 1:
+            out["top_p"] = tp
+        fp = config.GROQ_FREQUENCY_PENALTY
+        if fp > 0:
+            out["frequency_penalty"] = fp
+        return out
 
     @staticmethod
     def normalize_chunk_text(text: str) -> str:
@@ -519,17 +617,17 @@ class QASystem:
 
             model = config.GROQ_MODEL
             client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            user_content = _user_content_for_qa(context, question)
+            max_out = _max_output_tokens_for_question(question)
             resp = client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": _QA_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": f"Document text:\n{context}\n\nQuestion: {question}",
-                    },
+                    {"role": "user", "content": user_content},
                 ],
                 model=model,
-                max_tokens=config.GROQ_MAX_TOKENS,
+                max_tokens=max_out,
                 temperature=config.GROQ_TEMPERATURE,
+                **self._groq_extra_params(),
             )
             try:
                 return resp.choices[0].message.content
@@ -549,18 +647,18 @@ class QASystem:
 
         model = config.GROQ_MODEL
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        user_content = _user_content_for_qa(context, question)
+        max_out = _max_output_tokens_for_question(question)
         stream = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": _QA_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Document text:\n{context}\n\nQuestion: {question}",
-                },
+                {"role": "user", "content": user_content},
             ],
             model=model,
-            max_tokens=config.GROQ_MAX_TOKENS,
+            max_tokens=max_out,
             temperature=config.GROQ_TEMPERATURE,
             stream=True,
+            **self._groq_extra_params(),
         )
         for chunk in stream:
             try:

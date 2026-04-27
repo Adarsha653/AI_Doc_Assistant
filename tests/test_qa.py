@@ -2,8 +2,11 @@ from pathlib import Path
 
 from langchain_core.documents import Document
 
+from src import config
 from src.qa import (
     QASystem,
+    _max_output_tokens_for_question,
+    _user_content_for_qa,
     diversify_chunks_by_file,
     humanize_excerpt_preview_line,
     is_overview_style_query,
@@ -31,7 +34,21 @@ def test_wants_broader_retrieval_includes_fit_questions() -> None:
     assert wants_broader_retrieval("Ok, do you think this resume is good for a data scientist role?")
     assert wants_broader_retrieval("Is this resume suitable for an ML engineer role?")
     assert wants_broader_retrieval("Tell me about this resume")
+    assert wants_broader_retrieval("Who does this resume belong to?")
     assert not wants_broader_retrieval("What is the capital of Nepal?")
+
+
+def test_max_output_tokens_identity_capped() -> None:
+    assert _max_output_tokens_for_question("Who does this resume belong to?") == min(
+        config.GROQ_MAX_TOKENS_IDENTITY, config.GROQ_MAX_TOKENS
+    )
+    assert _max_output_tokens_for_question("What city is Monash in?") == config.GROQ_MAX_TOKENS
+
+
+def test_user_content_identity_has_constraints() -> None:
+    c = _user_content_for_qa("### Source file: r.pdf\nJane Doe", "Who is this?")
+    assert "Do not summarize" in c or "not summarize" in c
+    assert "name" in c.lower()
 
 
 def test_resume_chunk_priority_header_wins() -> None:
